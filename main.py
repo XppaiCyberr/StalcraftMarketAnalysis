@@ -35,6 +35,9 @@ def fetch_auction_data() -> dict:
     print(f"\r{Fore.GREEN}✓ Data fetched successfully!{Style.RESET_ALL}")
     return response.json()
 
+def format_price(price):
+    return f"{price:,.0f}"
+
 def get_quality_name(qlt):
     quality_names = {
         0: "Common",
@@ -46,7 +49,7 @@ def get_quality_name(qlt):
     }
     return quality_names.get(qlt, "Unknown")
 
-def analyze_prices(data: dict) -> dict:
+def analyze_and_display_prices(data: dict) -> dict:
     print(f"\n{Fore.YELLOW}Processing {len(data['prices'])} market entries...{Style.RESET_ALL}")
     
     # Group prices by quality
@@ -74,16 +77,40 @@ def analyze_prices(data: dict) -> dict:
         "recent_activity": []
     }
     
-    # Analysis by quality
+    # Display and store analysis by quality
+    print(f"\n{Fore.CYAN}📈 Shard Price Analysis by Quality Level{Style.RESET_ALL}")
+    print("=" * 50)
+    
+    quality_colors = {
+        0: Fore.WHITE,    # Common
+        1: Fore.GREEN,    # Uncommon
+        2: Fore.BLUE,     # Special
+        3: Fore.MAGENTA,  # Rare
+        4: Fore.YELLOW,   # Legendary
+        5: Fore.RED       # Exclusive
+    }
+    
     for qlt in sorted(quality_prices.keys()):
         prices = quality_prices[qlt]
         if not prices:
             continue
             
+        color = quality_colors.get(qlt, Fore.WHITE)
         avg_price = mean(prices)
         min_price = min(prices)
         max_price = max(prices)
         
+        # Display in console
+        print(f"\n{color}🏷️  {get_quality_name(qlt)} (Quality {qlt}):{Style.RESET_ALL}")
+        print(f"{'  └ Average Price:':<20} {Fore.GREEN}{format_price(avg_price)}₽{Style.RESET_ALL}")
+        print(f"{'  └ Minimum Price:':<20} {Fore.BLUE}{format_price(min_price)}₽{Style.RESET_ALL}")
+        print(f"{'  └ Maximum Price:':<20} {Fore.RED}{format_price(max_price)}₽{Style.RESET_ALL}")
+        print(f"{'  └ Number of items:':<20} {len(prices)}")
+        print(f"\n{'  💡 Buy Recommendations:'}")
+        print(f"{'  └ Standard:':<20} {Fore.YELLOW}{format_price(avg_price * 0.9)}₽{Style.RESET_ALL} (10% below avg)")
+        print(f"{'  └ Bargain:':<20} {Fore.GREEN}{format_price(min_price * 1.1)}₽{Style.RESET_ALL} (10% above min)")
+        
+        # Store in results
         analysis_results["quality_analysis"][get_quality_name(qlt)] = {
             "quality_level": qlt,
             "average_price": round(avg_price),
@@ -96,11 +123,32 @@ def analyze_prices(data: dict) -> dict:
             }
         }
     
-    # Recent activity
+    # Display and store market summary
+    print(f"\n{Fore.CYAN}📊 Market Summary{Style.RESET_ALL}")
+    print("=" * 50)
+    print(f"{'Total items analyzed:':<20} {len(data['prices'])}")
+    print(f"{'Items with bonus:':<20} {skipped_count}")
+    
+    # Display and store recent activity
+    print(f"\n{Fore.CYAN}🕒 Recent Market Activity{Style.RESET_ALL}")
+    print("=" * 50)
     recent_items = sorted(data['prices'], key=lambda x: x['time'], reverse=True)[:5]
+    
     for item in recent_items:
         additional = item.get('additional', {})
+        time = datetime.fromisoformat(item['time'].replace('Z', '+00:00'))
         qlt = additional.get('qlt')
+        color = quality_colors.get(qlt, Fore.WHITE) if qlt else Fore.WHITE
+        
+        quality_name = get_quality_name(qlt) if qlt is not None else ""
+        quality_text = f"({quality_name})" if quality_name else ""
+        bonus_info = f"{Fore.YELLOW}[Has Bonus]{Style.RESET_ALL}" if 'bonus_properties' in additional else ""
+        
+        # Display in console
+        print(f"{Fore.BLUE}{time.strftime('%Y-%m-%d %H:%M:%S')}{Style.RESET_ALL} - "
+              f"{color}{format_price(item['price'])}₽{Style.RESET_ALL} {quality_text} {bonus_info}")
+        
+        # Store in results
         analysis_results["recent_activity"].append({
             "time": item['time'],
             "price": item['price'],
@@ -118,7 +166,7 @@ def export_to_json(analysis_results: dict, filename: str = "market_analysis.json
 def main():
     try:
         data = fetch_auction_data()
-        analysis_results = analyze_prices(data)
+        analysis_results = analyze_and_display_prices(data)
         export_to_json(analysis_results)
         print(f"\n{Fore.GREEN}✓ Analysis complete! XppaiCyber{Style.RESET_ALL}")
     except requests.RequestException as e:
